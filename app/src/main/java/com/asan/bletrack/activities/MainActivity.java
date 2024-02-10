@@ -1,14 +1,18 @@
 package com.asan.bletrack.activities;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothClass;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.recyclerview.widget.ConcatAdapter;
 
 import com.asan.bletrack.Ping;
 import com.asan.bletrack.R;
@@ -18,6 +22,7 @@ import com.asan.bletrack.WatchForegroundService;
 
 
 import com.asan.bletrack.databinding.ActivityMainBinding;
+import com.asan.bletrack.dto.DeviceInfo;
 
 public class MainActivity extends Activity {
 
@@ -45,6 +50,8 @@ public class MainActivity extends Activity {
 
         String deviceid = Settings.Secure.getString(getApplicationContext().getContentResolver(), Settings.Secure.ANDROID_ID);
         StaticResources.deviceID = deviceid;
+        StaticResources.device = Build.MODEL;
+        StaticResources.os = Build.VERSION.RELEASE;
         deviceidText.setText(deviceid);
     }
 
@@ -87,6 +94,10 @@ public class MainActivity extends Activity {
     }
 
     protected void server_check(){
+        DeviceInfo deviceInfo = new DeviceInfo();
+        deviceInfo.setDeviceID(StaticResources.deviceID);
+        deviceInfo.setDevice(StaticResources.device);
+        deviceInfo.setOs(StaticResources.os);
         Ping ping = new Ping(StaticResources.ServerURL);
         ping.start();
         try{
