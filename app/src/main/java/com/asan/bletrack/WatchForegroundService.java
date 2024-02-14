@@ -7,7 +7,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.provider.Settings;
@@ -28,6 +27,7 @@ import com.asan.bletrack.activities.MainActivity;
 import com.asan.bletrack.dto.BeaconSignal;
 import com.asan.bletrack.dto.WatchItem;
 import com.asan.bletrack.filter.Kalman;
+import com.asan.bletrack.socket.config.WebSocketStompClient;
 
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconManager;
@@ -49,8 +49,9 @@ public class WatchForegroundService extends Service{
     private PowerManager.WakeLock wakeLock;
     private BeaconManager beaconManager;
     boolean is_started = false;
+    private WebSocketStompClient webSocketStompClient;
 
-
+    private String watchId = "";
 
     JSONObject one_beacon_json = new JSONObject();
     JSONObject result_json = new JSONObject();
@@ -69,16 +70,22 @@ public class WatchForegroundService extends Service{
         }
         is_started = true;
 
-        return START_STICKY;
+        if (intent != null && webSocketStompClient == null) {
+            this.watchId = intent.getStringExtra("watchId");
+            webSocketStompClient = new WebSocketStompClient(watchId);
+        }
+
+
+            return START_STICKY;
     }
 
     void initBeaconManager(){
         beaconManager = BeaconManager.getInstanceForApplication(this);
         beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
         beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
-        beaconManager.setBackgroundScanPeriod(5000);
+        beaconManager.setBackgroundScanPeriod(2000);
         beaconManager.setBackgroundBetweenScanPeriod(0);
-        beaconManager.setForegroundScanPeriod(5000);
+        beaconManager.setForegroundScanPeriod(2000);
         beaconManager.setForegroundBetweenScanPeriod(0);
         HashMap<String, Kalman> kalmanmap = new HashMap<String, Kalman>();
 
@@ -134,7 +141,7 @@ public class WatchForegroundService extends Service{
                     watchitem.item.add(tmp);
                 }
                 watchitem.deviceID = StaticResources.deviceID;
-                performBackgroundTask(StaticResources.ServerURL, String.valueOf((StaticResources.password)),beaconDataMap);
+                performBackgroundTask(beaconDataMap);
             }
         });
         beaconManager.enableForegroundServiceScanning(builder.build(), 456);
@@ -177,12 +184,8 @@ public class WatchForegroundService extends Service{
     }
 
 
-    private void performBackgroundTask(String serverAddress, String passwordText, HashMap<String, Double> beaconDataMap) {
-        String deviceid = Settings.Secure.getString(getApplicationContext().getContentResolver(), Settings.Secure.ANDROID_ID);
-        String URL = serverAddress + "api/receiveData";
+    private void performBackgroundTask(HashMap<String, Double> beaconDataMap) {
 
-
-        Log.e("test",URL);
 
         JSONArray json_array = new JSONArray();
 
@@ -201,15 +204,21 @@ public class WatchForegroundService extends Service{
 
         try {
             result_json.put("beacon_data", json_array);
-            result_json.put("password", passwordText);
-            result_json.put("android_id", deviceid);
+            result_json.put("android_id", watchId);
         } catch (JSONException e) {
             e.printStackTrace();
         }
-
         // 서버와 통신
-        sendNetworkRequest(URL, result_json);
+        webSocketStompClient.sendPositionData(result_json);
 
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (webSocketStompClient != null) {
+            webSocketStompClient.disconnect();
+        }
     }
 
 
@@ -251,5 +260,4 @@ public class WatchForegroundService extends Service{
     }
 
 
-    }
-
+}
